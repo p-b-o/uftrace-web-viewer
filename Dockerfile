@@ -1,33 +1,8 @@
 FROM docker.io/debian:trixie
 
-RUN apt update && apt install -y \
-build-essential \
-binutils \
-git \
-gcc-aarch64-linux-gnu \
-g++-aarch64-linux-gnu \
-bison \
-flex \
-bc \
-libssl-dev \
-python3 \
-rsync \
-cpio \
-wget \
-qemu-user \
-gdb-multiarch \
-parallel \
-cgdb
-RUN apt update && apt install -y \
-e2fsprogs libarchive13t64 locales-all
-RUN apt update && apt install -y \
-libgnutls28-dev
-RUN apt update && apt install -y ccache
-RUN apt update && apt install -y clang-tools
-RUN ln -s /usr/bin/intercept-build-* /usr/bin/intercept-build
-RUN apt update && apt install -y pigz
+RUN apt update && apt install -y build-essential git pigz wget
 
-# Need recent uftrace, which implements:
+# Need recent uftrace (v0.20), which implements:
 # - dump --srcline (81fe3b94782)
 # - fix for --time-range (5f347b2)
 # - add realtime clock option for using with uftrace record (f57c29f)
@@ -39,31 +14,9 @@ cd uftrace && git checkout v0.20 && \
 
 RUN apt update && apt install -y libyajl-dev
 RUN cd tmp && git clone https://github.com/p-b-o/chrome2fuchsia && \
-cd chrome2fuchsia && git checkout 07977568bf30fa724f9ed8960918946a29acc7bd && \
+cd chrome2fuchsia && git checkout 2e7b942 && \
 make && mv c2f /usr/bin && rm -rf /tmp/*
 
 RUN apt update && apt install -y black mypy node-typescript
 RUN wget -q https://github.com/biomejs/biome/releases/download/@biomejs/biome@2.4.5/biome-linux-x64 && \
 mv biome-linux-x64 /usr/bin/biome && chmod +x /usr/bin/biome
-
-ENV LLVM_VERSION=22
-RUN wget -q https://apt.llvm.org/llvm-snapshot.gpg.key -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-RUN echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-${LLVM_VERSION} main" >> /etc/apt/sources.list
-RUN apt update && apt install -y lldb-${LLVM_VERSION} llvm-${LLVM_VERSION}
-RUN ln -sf /usr/bin/llvm-nm-${LLVM_VERSION} /usr/bin/nm
-RUN ln -sf /usr/bin/llvm-addr2line-${LLVM_VERSION} /usr/bin/addr2line
-
-# wrap compilers to call ccache, keep frame pointer, and enable debug info
-RUN mkdir /opt/compiler_wrappers && \
-    for c in gcc g++ aarch64-linux-gnu-gcc aarch64-linux-gnu-g++; do \
-        f=/opt/compiler_wrappers/$c && \
-        echo '#!/usr/bin/env bash' >> $f && \
-        echo 'args="-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -g"' >> $f && \
-        echo '[ "$CC_NO_DEBUG_MACROS" == "1" ] || args="$args -ggdb3"' >> $f && \
-        echo '[[ "$*" =~ ' -E ' ]] && args=' >> $f && \
-        echo "exec ccache /usr/bin/$c \"\$@\" \$args" >> $f && \
-        chmod +x $f;\
-    done
-ENV PATH=/opt/compiler_wrappers:$PATH
-
-ENV LANG=en_US.UTF-8

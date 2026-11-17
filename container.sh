@@ -5,8 +5,8 @@ set -euo pipefail
 script_dir=$(dirname $(readlink -f $0))
 
 # build silently for 3 seconds, and restart if needed
-timeout 3 podman build -q -t build-linux-stack - < $script_dir/Dockerfile ||
-    podman build -t build-linux-stack - < $script_dir/Dockerfile
+timeout 3 podman build -q -t uftrace-web-viewer - < $script_dir/Dockerfile ||
+    podman build -t uftrace-web-viewer - < $script_dir/Dockerfile
 
 tty=-t
 [ -v CONTAINER_NO_TTY ] && tty=
@@ -19,5 +19,5 @@ podman run \
     --network host \
     --privileged \
     -e DISABLE_CONTAINER_CHECK=1 \
-    build-linux-stack \
+    uftrace-web-viewer \
     "$@"
