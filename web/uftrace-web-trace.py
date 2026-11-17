@@ -102,7 +102,7 @@ def copy_one_source(s: str, sources_dir: str) -> None:
     if s.startswith(here):
         dest = s.replace(here, sources_dir)
     else:
-        dest = sources_dir + '/' + s
+        dest = sources_dir + "/" + s
     dest_folder = os.path.dirname(dest)
     if not os.path.exists(dest_folder):
         os.makedirs(dest_folder)
