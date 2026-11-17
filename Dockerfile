@@ -20,3 +20,8 @@ make && mv c2f /usr/bin && rm -rf /tmp/*
 RUN apt update && apt install -y black mypy node-typescript
 RUN wget -q https://github.com/biomejs/biome/releases/download/@biomejs/biome@2.4.5/biome-linux-x64 && \
 mv biome-linux-x64 /usr/bin/biome && chmod +x /usr/bin/biome
+
+ENV PERFETTO_VERSION=qemu-linux-stack-v2
+RUN cd /usr/share && \
+wget -q https://github.com/p-b-o/perfetto/releases/download/${PERFETTO_VERSION}/perfetto.tar.gz && \
+tar --no-same-owner -xf perfetto.tar.gz && rm perfetto.tar.gz
