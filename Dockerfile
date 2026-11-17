@@ -1,6 +1,6 @@
 FROM docker.io/debian:trixie
 
-RUN apt update && apt install -y build-essential git pigz wget
+RUN apt update && apt install -y build-essential git pigz wget rsync
 
 # Need recent uftrace (v0.20), which implements:
 # - dump --srcline (81fe3b94782)
