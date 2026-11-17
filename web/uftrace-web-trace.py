@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import typing
 import multiprocessing
 
@@ -137,6 +138,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="uftrace-web-viewer",
         description="explore uftrace trace",
+        add_help=False,
+    )
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="store_true",
+        help="show this help message and exit",
     )
     parser.add_argument(
         "exec_log",
@@ -161,6 +169,10 @@ def main() -> None:
         help="base url for sources",
     )
     args = parser.parse_args()
+
+    if args.help:
+        parser.print_help()
+        sys.exit(1)
 
     if not os.path.exists("uftrace.data"):
         raise Exception("can't find uftrace folder")

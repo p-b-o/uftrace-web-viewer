@@ -11,6 +11,12 @@ fi
 
 web=$script_dir/web
 data=$(pwd)/uftrace.data/web
+params_file=$data/.params
+params=$(printf '%q ' "$@")
+
+if [ -d $data ] && [ "$(cat $params_file 2>/dev/null)" != "$params" ]; then
+    rm -rf $data
+fi
 
 if [ ! -d $data ]; then
     trap "rm -rf $data" EXIT
@@ -19,5 +25,6 @@ if [ ! -d $data ]; then
         /usr/share/perfetto \
         $web/style.css $web/uftrace-web-viewer.js $web/index.html \
         $data/
+    echo "$params" > $params_file
     trap - EXIT
 fi
