@@ -32,7 +32,9 @@ python3 - $web/trace.json <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1]))
 labels = [e["label"] for e in data["events"]]
-assert labels == ["a", "b", "c", "d"], labels
+assert labels == ["START", "a", "b", "c", "d", "END"], labels
+ts = [e["ts"] for e in data["events"]]
+assert ts == sorted(ts), ts
 assert data["traces"], "no traces"
 PY
 ls $web/traces/*.gz

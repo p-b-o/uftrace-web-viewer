@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import typing
@@ -28,17 +29,92 @@ def get_events(exec_log: str) -> list[Event]:
             if len(line_str) == 0:
                 continue
             line = line_str.split(" ")
-            ts_str = line[0].replace(".", "")
-            if not re.search("^[0-9]*$", ts_str):
+            # seconds, with optional fractional part (up to nanoseconds)
+            m = re.match(r"^([0-9]+)(?:\.([0-9]{1,9}))?$", line[0])
+            if not m:
                 print("ignore line without timestamp: " + orig_line)
                 continue
-            ts = int(ts_str) * 1000
+            sec, frac = m.group(1), m.group(2) or ""
+            ts = int(sec) * NANOSEC_IN_ONE_SEC + int(frac.ljust(9, "0"))
             line.pop(0)
             label = " ".join(line)
             events.append(Event(ts=ts, label=label))
     if not events:
         raise Exception("no events found in: " + exec_log)
     return events
+
+
+# struct uftrace_record, from uftrace.h
+RECORD_SIZE = 16
+RECORD_MAGIC = 0x5
+UFTRACE_ENTRY = 0
+UFTRACE_EXIT = 1
+
+
+def parse_record(data: bytes, offset: int) -> typing.Tuple[int, int, int, int]:
+    time, bits = struct.unpack_from("<QQ", data, offset)
+    rtype = bits & 0x3
+    more = (bits >> 2) & 0x1
+    magic = (bits >> 3) & 0x7
+    return time, rtype, more, magic
+
+
+def get_task_bounds(path: str) -> typing.Optional[typing.Tuple[int, int]]:
+    size = os.path.getsize(path)
+    if size < RECORD_SIZE:
+        return None
+    with open(path, "rb") as f:
+        first, _, _, magic = parse_record(f.read(RECORD_SIZE), 0)
+        if magic != RECORD_MAGIC:
+            raise Exception("invalid first record in: " + path)
+        # records are followed by variable length arguments (when more is
+        # set), which can't be decoded without arg specs. Thus, search
+        # backward from the end for the last valid record (8 bytes aligned).
+        chunk_size = 4096
+        while True:
+            start = max(0, size - chunk_size)
+            f.seek(start)
+            data = f.read(size - start)
+            for pos in range(size - RECORD_SIZE, start - 1, -8):
+                time, rtype, more, magic = parse_record(data, pos - start)
+                if magic != RECORD_MAGIC or time < first:
+                    continue
+                if rtype not in (UFTRACE_ENTRY, UFTRACE_EXIT):
+                    continue
+                # last record ends file, unless it has arguments
+                at_end = pos + RECORD_SIZE == size
+                if at_end != (more == 0):
+                    continue
+                return first, time
+            if start == 0:
+                raise Exception("can't find last record in: " + path)
+            chunk_size *= 2
+
+
+def get_trace_bounds() -> typing.Tuple[int, int]:
+    # each task has its own file, with records sorted by time
+    bounds = []
+    for file in os.listdir("uftrace.data"):
+        if not re.match(r"^[0-9]+\.dat$", file):
+            continue
+        task_bounds = get_task_bounds("uftrace.data/" + file)
+        if task_bounds:
+            bounds.append(task_bounds)
+    if not bounds:
+        raise Exception("no records found in uftrace trace")
+    first = min(b[0] for b in bounds)
+    last = max(b[1] for b in bounds)
+    # round to microseconds (like exec.log), as javascript can't represent
+    # nanosecond timestamps exactly, and they are used to name subtraces
+    first = first // 1000 * 1000
+    last = -(-last // 1000) * 1000
+    return first, last
+
+
+def add_trace_bounds(events: list[Event]) -> list[Event]:
+    print("retrieve first and last timestamps from uftrace trace")
+    first, last = get_trace_bounds()
+    return [Event(ts=first, label="START"), *events, Event(ts=last, label="END")]
 
 
 class Subtrace(typing.TypedDict):
@@ -180,6 +256,7 @@ def main() -> None:
     web_dir = "uftrace.data/web"
 
     events = get_events(args.exec_log)
+    events = add_trace_bounds(events)
 
     traces = sub_traces(events, args.trace_duration)
 
